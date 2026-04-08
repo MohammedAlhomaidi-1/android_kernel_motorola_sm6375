@@ -14,25 +14,32 @@ jobs:
           sudo apt update
           sudo apt install -y bc build-essential zip gcc-aarch64-linux-gnu clang lld libssl-dev flex bison git
 
-      - name: Enable BBR and FQ
+      - name: Configure BBR and FQ
         run: |
-          # تفعيل BBR و FQ بشكل عدواني في جميع ملفات الإعدادات المحتملة
-          find arch/arm64/configs/ -name "*defconfig" -exec sh -c 'echo "CONFIG_TCP_CONG_BBR=y" >> {}' \;
-          find arch/arm64/configs/ -name "*defconfig" -exec sh -c 'echo "CONFIG_NET_SCH_FQ=y" >> {}' \;
-          find arch/arm64/configs/ -name "*defconfig" -exec sh -c 'echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> {}' \;
+          # إضافة الإعدادات مباشرة لملف الإعدادات الذي وجدته
+          TARGET_CONFIG="arch/arm64/configs/vendor/holi-qgki_defconfig"
+          echo "CONFIG_TCP_CONG_BBR=y" >> $TARGET_CONFIG
+          echo "CONFIG_NET_SCH_FQ=y" >> $TARGET_CONFIG
+          echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> $TARGET_CONFIG
+          
+          # تحسينات إضافية للألعاب (اختياري)
+          echo "CONFIG_HZ_1000=y" >> $TARGET_CONFIG
+          echo "CONFIG_HZ=1000" >> $TARGET_CONFIG
 
       - name: Run Kernel Build
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          export CC=clang
-          # محاولة البناء بدون IAS (المجمع المدمج) لتفليل الأخطاء التقنية
-          make O=out vendor/sm6375-gki_defconfig
+          
+          # استخدام ملف holi-qgki_defconfig المكتشف
+          make O=out vendor/holi-qgki_defconfig
+          
+          # البدء بالبناء باستخدام مترجم Clang
           make O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- HOSTCC=gcc -j$(nproc)
 
-      - name: Upload Result
-        if: always() # سيحاول الرفع حتى لو فشل البناء لنرى الملفات الناتجة
+      - name: Upload Kernel Image
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Result
-          path: out/arch/arm64/boot/
+          name: Kernel-Motorola-BBR
+          path: out/arch/arm64/boot/Image.gz
