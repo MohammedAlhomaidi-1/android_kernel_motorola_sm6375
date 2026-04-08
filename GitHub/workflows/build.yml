@@ -1,0 +1,38 @@
+name: Build Motorola Kernel
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v3
+
+      - name: Setup Build Environment
+        run: |
+          sudo apt update
+          sudo apt install -y bc build-essential zip gcc-aarch64-linux-gnu clang lld libssl-dev flex bison
+
+      - name: Enable BBR and FQ
+        run: |
+          # إضافة إعدادات BBR و FQ لملف الإعدادات الافتراضي
+          # سنستهدف ملف sm6375_defconfig أو gki_defconfig
+          echo "CONFIG_TCP_CONG_BBR=y" >> arch/arm64/configs/vendor/sm6375-gki_defconfig
+          echo "CONFIG_NET_SCH_FQ=y" >> arch/arm64/configs/vendor/sm6375-gki_defconfig
+          echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> arch/arm64/configs/vendor/sm6375-gki_defconfig
+
+      - name: Run Kernel Build
+        run: |
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          # أمر البناء المخصص لموتورولا sm6375
+          make O=out vendor/sm6375-gki_defconfig
+          make O=out CC=clang LLVM=1 LLVM_IAS=1 -j$(nproc)
+
+      - name: Upload Result
+        uses: actions/upload-artifact@v3
+        with:
+          name: Kernel-BBR-Motorola
+          path: out/arch/arm64/boot/Image.gz
+          
