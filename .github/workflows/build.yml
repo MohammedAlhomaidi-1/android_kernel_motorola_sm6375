@@ -12,25 +12,27 @@ jobs:
       - name: Setup Build Environment
         run: |
           sudo apt update
-          sudo apt install -y bc build-essential zip gcc-aarch64-linux-gnu clang lld libssl-dev flex bison
+          sudo apt install -y bc build-essential zip gcc-aarch64-linux-gnu clang lld libssl-dev flex bison git
 
       - name: Enable BBR and FQ
         run: |
-          # تفعيل الخيارات في ملف الإعدادات المخصص للمعالج SM6375
-          echo "CONFIG_TCP_CONG_BBR=y" >> arch/arm64/configs/vendor/sm6375-gki_defconfig
-          echo "CONFIG_NET_SCH_FQ=y" >> arch/arm64/configs/vendor/sm6375-gki_defconfig
-          echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> arch/arm64/configs/vendor/sm6375-gki_defconfig
+          # تفعيل BBR و FQ بشكل عدواني في جميع ملفات الإعدادات المحتملة
+          find arch/arm64/configs/ -name "*defconfig" -exec sh -c 'echo "CONFIG_TCP_CONG_BBR=y" >> {}' \;
+          find arch/arm64/configs/ -name "*defconfig" -exec sh -c 'echo "CONFIG_NET_SCH_FQ=y" >> {}' \;
+          find arch/arm64/configs/ -name "*defconfig" -exec sh -c 'echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> {}' \;
 
       - name: Run Kernel Build
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          # استخدام LLVM/Clang المدمج في نظام Ubuntu للبناء
+          export CC=clang
+          # محاولة البناء بدون IAS (المجمع المدمج) لتفليل الأخطاء التقنية
           make O=out vendor/sm6375-gki_defconfig
-          make O=out CC=clang LLVM=1 LLVM_IAS=1 -j$(nproc)
+          make O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- HOSTCC=gcc -j$(nproc)
 
       - name: Upload Result
+        if: always() # سيحاول الرفع حتى لو فشل البناء لنرى الملفات الناتجة
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-BBR-Motorola
-          path: out/arch/arm64/boot/Image.gz
+          name: Kernel-Result
+          path: out/arch/arm64/boot/
