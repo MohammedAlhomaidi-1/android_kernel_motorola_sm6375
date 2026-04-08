@@ -14,32 +14,34 @@ jobs:
           sudo apt update
           sudo apt install -y bc build-essential zip gcc-aarch64-linux-gnu clang lld libssl-dev flex bison git
 
-      - name: Configure BBR and FQ
+      - name: Configure BBR and Fix Moto Errors
         run: |
-          # إضافة الإعدادات مباشرة لملف الإعدادات الذي وجدته
           TARGET_CONFIG="arch/arm64/configs/vendor/holi-qgki_defconfig"
+          
+          # تفعيل BBR و FQ
           echo "CONFIG_TCP_CONG_BBR=y" >> $TARGET_CONFIG
           echo "CONFIG_NET_SCH_FQ=y" >> $TARGET_CONFIG
           echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> $TARGET_CONFIG
           
-          # تحسينات إضافية للألعاب (اختياري)
-          echo "CONFIG_HZ_1000=y" >> $TARGET_CONFIG
-          echo "CONFIG_HZ=1000" >> $TARGET_CONFIG
+          # حل مشكلة "Moto DT w/o overlay is undefined"
+          # سنقوم بتعريف خيارات الـ Overlay المطلوبة في الملف
+          echo "CONFIG_BUILD_ARM64_DT_OVERLAY=y" >> $TARGET_CONFIG
+          echo "CONFIG_MSM_DRM_TUI=y" >> $TARGET_CONFIG
 
       - name: Run Kernel Build
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # استخدام ملف holi-qgki_defconfig المكتشف
+          # تجهيز الإعدادات
           make O=out vendor/holi-qgki_defconfig
           
-          # البدء بالبناء باستخدام مترجم Clang
-          make O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- HOSTCC=gcc -j$(nproc)
+          # البدء بالبناء مع إضافة متغير تفعيل الـ DTBO لتجاوز خطأ الموتورولا
+          make O=out CC=clang CROSS_COMPILE=aarch64-linux-gnu- HOSTCC=gcc CONFIG_BUILD_ARM64_DT_OVERLAY=y -j$(nproc)
 
-      - name: Upload Kernel Image
-        if: success()
+      - name: Upload Result
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Motorola-BBR
-          path: out/arch/arm64/boot/Image.gz
+          name: Kernel-Motorola-Final
+          path: out/arch/arm64/boot/
